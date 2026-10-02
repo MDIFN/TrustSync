@@ -95,7 +95,41 @@ src/app/dashboard/       app shell, questionnaires, knowledge base, billing
    a SOC 2 PDF under **Knowledge Base**, wait for ingestion, then upload a
    questionnaire `.xlsx` and watch answers stream into the review workspace.
 
-## Deployment (Vercel)
+## Deployment (AWS Amplify Hosting)
+
+The repo ships an `amplify.yml` build spec (Node 20, `npm ci`, `next build`,
+SSR compute). Deploy from a machine with the AWS CLI installed:
+
+```bash
+aws configure                                   # IAM access key + secret, region us-east-1
+
+aws iam create-service-linked-role \
+  --aws-service-name amplify.amazonaws.com      # no-op if it already exists
+
+aws amplify create-app --name TrustSync \
+  --repository https://github.com/MDIFN/TrustSync \
+  --access-token <GITHUB_PAT> \
+  --iam-service-role-arn <AMPLIFY_SERVICE_ROLE_ARN> \
+  --environment-variables NEXT_PUBLIC_SITE_URL=https://master.<APP_ID>.amplifyapp.com
+
+aws amplify create-branch --app-id <APP_ID> --branch-name master \
+  --enable-auto-build \
+  --environment-variables NEXT_PUBLIC_SUPABASE_URL=... NEXT_PUBLIC_SUPABASE_ANON_KEY=... \
+      SUPABASE_SERVICE_ROLE_KEY=... OPENAI_API_KEY=... ANTHROPIC_API_KEY=... \
+      STRIPE_SECRET_KEY=... STRIPE_WEBHOOK_SECRET=... \
+      STRIPE_PRICE_GROWTH=... STRIPE_PRICE_SCALE=... STRIPE_PRICE_ENTERPRISE=... \
+      INNGEST_SIGNING_KEY=... INNGEST_EVENT_KEY=...
+
+aws amplify start-job --app-id <APP_ID> --branch-name master --job-type RELEASE
+curl https://master.<APP_ID>.amplifyapp.com/api/health   # expect HTTP 200
+```
+
+Every push to `master` now builds and deploys automatically. The full env var
+checklist lives in `.env.example`; see `docs/aws-deploy.md` for the step-by-step
+runbook including IAM role creation and post-deploy wiring (Supabase
+migrations, Inngest Cloud, Stripe webhooks).
+
+### Alternative: Vercel
 
 ```bash
 npm install -g vercel
